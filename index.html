@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anthologie 2026 - Focus</title>
+    <style>
+        :root {
+            --bg: #ffffff; --text: #1a1a1a; --primary: #3498db;
+            --secondary: #f8f9fa; --border: #e0e0e0; --ui-opacity: 1;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #121212; --text: #e0e0e0; --primary: #3498db;
+                --secondary: #1e1e1e; --border: #333;
+            }
+        }
+
+        /* Mode Focus */
+        body.focus-mode { --ui-opacity: 0.1; }
+        body.focus-mode header, body.focus-mode .memory-controls, body.focus-mode .btn-delete { 
+            opacity: var(--ui-opacity); transition: 0.5s; 
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg); color: var(--text);
+            margin: 0; line-height: 1.7; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+        }
+
+        header {
+            padding: 10px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; background: var(--secondary); gap: 15px; z-index: 1001;
+        }
+
+        .menu-toggle { background: none; border: 1px solid var(--border); border-radius: 5px; color: var(--text); cursor: pointer; padding: 5px 12px; }
+
+        .main-container { display: flex; flex: 1; position: relative; overflow: hidden; }
+
+        .sidebar {
+            width: 280px; border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; background: var(--secondary);
+            transition: transform 0.3s ease; position: absolute; top: 0; bottom: 0; left: 0; z-index: 1000;
+            transform: translateX(-100%);
+        }
+        .sidebar.open { transform: translateX(0); }
+
+        .poem-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .poem-item { padding: 12px; border-radius: 8px; cursor: pointer; margin-bottom: 8px; background: var(--bg); border: 1px solid var(--border); }
+        .poem-item.active { border-color: var(--primary); font-weight: bold; }
+
+        .content { flex: 1; overflow-y: auto; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; }
+
+        .poem-display { max-width: 650px; width: 100%; white-space: pre-wrap; font-size: 1.25rem; margin-top: 20px; text-align: left; }
+        .poem-header { text-align: center; margin-bottom: 30px; }
+        .poem-title { font-size: 2.2rem; margin: 0; color: var(--primary); }
+
+        .memory-controls { margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .btn-tool { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--bg); color: var(--text); cursor: pointer; }
+        .btn-tool.active { background: var(--primary); color: white; }
+
+        .hidden-word { background: var(--border); color: transparent; border-radius: 3px; cursor: pointer; }
+
+        .sidebar-footer { padding: 15px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-data { font-size: 0.75rem; padding: 5px; cursor: pointer; background: #666; color: white; border: none; border-radius: 4px; }
+
+        .add-btn { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; margin: 15px; font-weight: bold; }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-content { background: var(--bg); padding: 25px; border-radius: 15px; width: 90%; max-width: 500px; }
+        textarea { width: 100%; height: 200px; margin: 10px 0; padding: 10px; box-sizing: border-box; }
+        input[type="text"], select { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+<header>
+    <button class="menu-toggle" onclick="toggleSidebar()">☰ Menu</button>
+    <div style="flex-grow: 1; font-weight: bold;">Anthologie 2026</div>
+    <button class="menu-toggle" onclick="toggleFocus()" title="Mode Focus">👁️</button>
+</header>
+
+<div class="main-container">
+    <div class="sidebar" id="sidebar">
+        <button class="add-btn" onclick="openModal()">+ Nouveau Poème</button>
+        <div class="poem-list" id="poemList"></div>
+        <div class="sidebar-footer">
+            <button class="btn-data" onclick="exportData()">📤 Export</button>
+            <button class="btn-data" onclick="document.getElementById('importFile').click()">📥 Import</button>
+            <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+        </div>
+    </div>
+
+    <div class="content" id="textContent" onclick="closeSidebarIfOpen()">
+        <div id="emptyState" style="margin-top: 20vh; opacity: 0.5;">Sélectionnez un poème dans le menu</div>
+        
+        <div id="poemViewer" style="display: none; width: 100%; max-width: 650px;">
+            <div class="poem-header">
+                <h1 class="poem-title" id="viewTitle">Titre</h1>
+                <div id="viewAuthor" style="font-style: italic; opacity: 0.8;">Auteur</div>
+            </div>
+
+            <div class="memory-controls">
+                <button class="btn-tool" onclick="readAloud()">🔊 Écouter</button>
+                <div style="width: 1px; background: var(--border); margin: 0 10px;"></div>
+                <button id="m0" onclick="setMemoryMode(0)" class="btn-tool active">Plein</button>
+                <button id="m1" onclick="setMemoryMode(0.25)" class="btn-tool">75%</button>
+                <button id="m2" onclick="setMemoryMode(0.5)" class="btn-tool">50%</button>
+            </div>
+
+            <div class="poem-display" id="viewContent"></div>
+            
+            <button class="btn-delete" onclick="deletePoem()" style="margin-top: 60px; background: none; border: none; color: #e74c3c; cursor: pointer; font-size: 0.8rem;">Supprimer</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="poemModal">
+    <div class="modal-content">
+        <h3>Ajouter un poème</h3>
+        <input type="text" id="editTitle" placeholder="Titre">
+        <input type="text" id="editAuthor" placeholder="Auteur">
+        <select id="editLang">
+            <option value="Français">Français</option>
+            <option value="Anglais">Anglais</option>
+            <option value="Espagnol">Espagnol</option>
+        </select>
+        <textarea id="editContent" placeholder="Vers du poème..."></textarea>
+        <button class="add-btn" style="width:100%; margin:10px 0" onclick="savePoem()">Enregistrer</button>
+        <button onclick="closeModal()" style="width:100%; background:none; border:none; color:gray; cursor:pointer;">Annuler</button>
+    </div>
+</div>
+
+<script>
+    let poems = JSON.parse(localStorage.getItem('poems_2026_final')) || [];
+    let currentIndex = -1;
+    let hideRatio = 0;
+
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+    function closeSidebarIfOpen() { document.getElementById('sidebar').classList.remove('open'); }
+    function toggleFocus() { document.body.classList.toggle('focus-mode'); }
+    function openModal() { document.getElementById('poemModal').style.display = 'flex'; closeSidebarIfOpen(); }
+    function closeModal() { document.getElementById('poemModal').style.display = 'none'; }
+
+    function savePoem() {
+        const title = document.getElementById('editTitle').value;
+        const author = document.getElementById('editAuthor').value;
+        const content = document.getElementById('editContent').value;
+        const lang = document.getElementById('editLang').value;
+        if(!title || !content) return;
+        poems.push({ id: Date.now(), title, author, content, lang });
+        saveAndRender();
+        closeModal();
+    }
+
+    function renderList() {
+        const list = document.getElementById('poemList');
+        list.innerHTML = poems.map((p, i) => `
+            <div class="poem-item ${i === currentIndex ? 'active' : ''}" onclick="selectPoem(${i})">
+                <strong>${p.title}</strong><br><small>${p.author} (${p.lang})</small>
+            </div>
+        `).join('');
+    }
+
+    function selectPoem(index) {
+        currentIndex = index;
+        hideRatio = 0;
+        const p = poems[index];
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('poemViewer').style.display = 'block';
+        document.getElementById('viewTitle').innerText = p.title;
+        document.getElementById('viewAuthor').innerText = p.author;
+        updateContent();
+        renderList();
+        closeSidebarIfOpen();
+    }
+
+    function updateContent() {
+        const p = poems[currentIndex];
+        const display = document.getElementById('viewContent');
+        if(hideRatio === 0) {
+            display.innerText = p.content;
+        } else {
+            display.innerHTML = p.content.split('\n').map(line => 
+                line.split(' ').map(word => 
+                    (word.length > 2 && Math.random() < hideRatio) 
+                    ? `<span class="hidden-word" onclick="this.classList.remove('hidden-word')">${word}</span>` 
+                    : word
+                ).join(' ')
+            ).join('\n');
+        }
+        document.querySelectorAll('.memory-controls button').forEach((b, i) => {
+            if(i > 0) b.classList.toggle('active', [0, 0.25, 0.5][i-1] === hideRatio);
+        });
+    }
+
+    function setMemoryMode(r) { hideRatio = r; updateContent(); }
+
+    function readAloud() {
+        const p = poems[currentIndex];
+        const msg = new SpeechSynthesisUtterance(p.content);
+        const voices = {'Français':'fr-FR', 'Anglais':'en-US', 'Espagnol':'es-ES'};
+        msg.lang = voices[p.lang];
+        window.speechSynthesis.speak(msg);
+    }
+
+    function exportData() {
+        const blob = new Blob([JSON.stringify(poems)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'anthologie_2026.json';
+        a.click();
+    }
+
+    function importData(e) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            poems = JSON.parse(event.target.result);
+            saveAndRender();
+        };
+        reader.readAsText(e.target.files[0]);
+    }
+
+    function deletePoem() {
+        if(confirm("Supprimer ce poème ?")) {
+            poems.splice(currentIndex, 1);
+            saveAndRender();
+            location.reload();
+        }
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('poems_2026_final', JSON.stringify(poems));
+        renderList();
+    }
+
+    renderList();
+</script>
+</body>
+</html>
